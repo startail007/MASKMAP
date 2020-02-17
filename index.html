@@ -466,7 +466,6 @@
               });
             },
             filterItem_click: function(item) {
-              var that = this;
               this.markers.getLayers().forEach(function(el) {
                 if (el.isPopupOpen() && el.options.id !== item.id) {
                   el.closePopup();
@@ -478,12 +477,17 @@
               this.map.flyTo(item.coordinates, 18, {
                 duration: duration
               });
-              this.map.once("moveend", function() {
-                var marker = that.markers.getLayers().find(function(el) {
-                  return el.options.id === item.id;
-                });
-                marker.openPopup();
-              });
+              this.map.once(
+                "moveend",
+                function() {
+                  var marker = this.markers.getLayers().find(function(el) {
+                    return el.options.id === item.id;
+                  });
+                  this.markers.zoomToShowLayer(marker, function() {
+                    marker.openPopup();
+                  });
+                }.bind(this)
+              );
               if (this.phone) {
                 this.sideOpen = false;
               }
