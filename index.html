@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>口罩存貨地圖</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css?family=Noto+Sans+TC&display=swap" rel="stylesheet" />
+
+    <link href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" rel="stylesheet" />
+    <link href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" rel="stylesheet" />
+    <link href="https://cdn.bootcss.com/loaders.css/0.1.2/loaders.min.css" rel="stylesheet" />
+
+    <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster-src.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.11/vue.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.min.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+      }
+      * {
+        font-family: "Noto Sans TC", sans-serif;
+      }
+      a {
+        text-decoration: none;
+        color: inherit;
+      }
+
+      #app {
+        position: absolute;
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      [v-cloak] {
+        display: none;
+      }
+      #map {
+        position: absolute;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .content {
+        position: absolute;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .loading {
+        position: absolute;
+        display: block;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(50, 50, 50, 0.8);
+        left: 0px;
+        top: 0px;
+        z-index: 1000;
+      }
+      .side {
+        position: relative;
+        display: block;
+        width: 100%;
+        max-width: 400px;
+        height: 100%;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s;
+      }
+      .side .sideButton {
+        position: absolute;
+        display: block;
+        width: 24px;
+        height: 48px;
+        top: 20px;
+        left: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        box-shadow: 2px 0px 4px rgba(0, 0, 0, 0.25);
+        text-align: center;
+        line-height: 48px;
+        cursor: pointer;
+      }
+      .side .sideButton:hover {
+        background-color: rgba(244, 244, 244, 0.8);
+      }
+      .side.open {
+        transform: translateX(0%);
+      }
+      .side .close {
+        display: none;
+      }
+
+      .tool {
+        position: relative;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        flex-direction: column;
+        background-color: rgba(255, 255, 255, 0.8);
+        color: #333;
+        transition: box-shadow 0.3s;
+      }
+
+      .side.open .tool {
+        box-shadow: 2px 0px 4px rgba(0, 0, 0, 0.25);
+      }
+      .toolContent {
+        flex: 1;
+        overflow: auto;
+      }
+      .toolTop {
+        position: relative;
+        display: block;
+        background-color: rgba(52, 166, 232, 0.5);
+        padding: 10px;
+        border-bottom: 1px solid #e6e6e6;
+        font-size: 1.2em;
+      }
+      .toolTop .title {
+        text-align: center;
+      }
+      .filterTable {
+        width: 100%;
+      }
+      .filterTable td {
+        width: 50%;
+      }
+      .filterTable select {
+        width: 100%;
+        font-size: 1em;
+        padding: 4px;
+        color: inherit;
+      }
+      .filterTable select:disabled {
+        background-color: #ddd;
+      }
+      .filterItem {
+        position: relative;
+        display: block;
+        background-color: rgba(255, 255, 255, 0.5);
+        margin: 2px 0px;
+        padding: 10px;
+        border-top: 1px solid #e6e6e6;
+        border-bottom: 1px solid #e6e6e6;
+        color: inherit;
+      }
+      .filterItem:hover {
+        background-color: rgba(239, 227, 199, 0.5);
+      }
+      .filterItem .mask {
+        display: flex;
+        justify-content: space-between;
+      }
+      .filterItem .mask .item {
+        position: relative;
+        display: block;
+        width: 50%;
+        text-align: center;
+        background-color: rgba(241, 241, 241, 0.5);
+        border: 1px solid rgb(59, 142, 144);
+        padding: 10px 5px;
+        margin: 5px;
+        color: #172a48;
+        font-weight: bold;
+      }
+      .filterItem .info .fas {
+        width: 1em;
+        text-align: center;
+        margin-right: 5px;
+        font-size: 1em;
+      }
+      .filterItem .info a:hover {
+        color: #633;
+      }
+      .filterItem .info h4 {
+        display: flex;
+        align-items: baseline;
+      }
+      .filterItem .info h4 .title {
+        white-space: nowrap;
+      }
+
+      .markerItem {
+        position: relative;
+        display: block;
+        background-color: rgba(255, 255, 255, 0.5);
+        margin: 2px 0px;
+        padding: 10px;
+        /*border-top: 1px solid #e6e6e6;
+        border-bottom: 1px solid #e6e6e6;*/
+        color: inherit;
+      }
+      .markerItem .mask {
+        display: flex;
+        justify-content: space-between;
+      }
+      .markerItem .mask .item {
+        position: relative;
+        display: block;
+        width: 50%;
+        text-align: center;
+        background-color: rgba(241, 241, 241, 0.5);
+        border: 1px solid rgb(59, 142, 144);
+        padding: 10px 5px;
+        margin: 5px;
+        color: #172a48;
+        font-weight: bold;
+      }
+      .markerItem .info .fas {
+        width: 1em;
+        text-align: center;
+        margin-right: 5px;
+        font-size: 1em;
+      }
+      .markerItem .info a:hover {
+        color: #633;
+      }
+
+      .leaflet-container .leaflet-popup a {
+        color: inherit;
+      }
+      #app.phone .side .close {
+        position: absolute;
+        display: block;
+        background-color: rgba(255, 255, 255, 0.8);
+        width: 36px;
+        height: 36px;
+        top: 10px;
+        right: 10px;
+        text-align: center;
+        line-height: 36px;
+        cursor: pointer;
+      }
+      .loader {
+        position: absolute;
+        display: block;
+        left: 50%;
+        top: 50%;
+      }
+      /*@media only screen and (max-width: 480px) {
+      }*/
+    </style>
+  </head>
+  <body>
+    <div id="app" :class="{phone:phone}" v-cloak>
+      <div class="content">
+        <div id="map"></div>
+        <div class="side" :class="{open:sideOpen}">
+          <div class="tool">
+            <div class="toolTop">
+              <h2 class="title">口罩存貨地圖</h2>
+              <table class="filterTable">
+                <tbody>
+                  <tr>
+                    <td>縣市</td>
+                    <td>鄉鎮市區</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <select v-model="county">
+                        <option v-for="(item) in countyList" :value="item.value" :key="item.value">{{item.title}}</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select v-model="town" :disabled="county===''">
+                        <option v-for="(item) in townList" :value="item.value" :key="item.value">{{item.title}}</option>
+                      </select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="close" @click="close_click"><i class="fas fa-times"></i></div>
+            </div>
+            <div class="toolContent">
+              <div v-for="(item) in filterData" :key="item.id" class="filterItem" @click="filterItem_click(item)">
+                <div class="info">
+                  <h3>{{item.name}}</h3>
+                  <h4><i class="fas fa-map-marker-alt"></i><span class="title">地址：</span><a :href="'https://www.google.com.tw/maps/place/'+item.address" target="_blank">{{item.address}}</a></h4>
+                  <h4><i class="fas fa-phone-alt"></i><span class="title">電話：</span><a :href="'tel:'+item.phone">{{item.phone}}</a></h4>
+                </div>
+                <div class="mask">
+                  <div class="item">成人口罩：{{item.mask_adult}} 個</div>
+                  <div class="item">兒童口罩：{{item.mask_child}} 個</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="sideButton" @click="sideButton_click"><i class="fas" :class="{'fa-caret-left':sideOpen,'fa-caret-right':!sideOpen}"></i></div>
+        </div>
+      </div>
+      <div class="loading" v-if="loading">
+        <div class="loader">
+          <div class="ball-clip-rotate-multiple">
+            <div></div>
+            <div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      init();
+      function init() {
+        var app = new Vue({
+          el: "#app",
+          data: {
+            loading: true,
+            data: [],
+            map: null,
+            markers: null,
+            filterData: [],
+            county: "",
+            countyList: [],
+            town: "",
+            townList: [],
+            sideOpen: false,
+            phone: false
+          },
+          mounted: function() {
+            this.map = this.createMap();
+            axios({
+              methods: "get",
+              url: "https://raw.githubusercontent.com/kiang/pharmacies/master/json/points.json"
+            }).then(
+              function(resp) {
+                this.resize();
+                window.addEventListener("resize", this.resize);
+                this.loading = false;
+                this.data = resp.data.features.map(function(el) {
+                  return {
+                    id: el.properties.id,
+                    name: el.properties.name,
+                    phone: el.properties.phone,
+                    address: el.properties.address,
+                    address: el.properties.address,
+                    mask_adult: el.properties.mask_adult,
+                    mask_child: el.properties.mask_child,
+                    updated: el.properties.updated,
+                    note: el.properties.note,
+                    county: el.properties.county,
+                    town: el.properties.town,
+                    coordinates: [el.geometry.coordinates[1], el.geometry.coordinates[0]]
+                  };
+                });
+                //this.data = resp.data.features;
+                this.init();
+              }.bind(this)
+            );
+          },
+          watch: {
+            county: function(val) {
+              if (this.town === "") {
+                this.filterUpdate();
+              }
+              if (val !== "") {
+                this.town = "";
+                this.townList = [{ title: "全部", value: "" }].concat(
+                  this.getList(this.data, {
+                    judge: function(el) {
+                      return el.county === val;
+                    },
+                    value: function(el) {
+                      return el.town;
+                    }
+                  })
+                );
+              } else {
+                this.town = "";
+                this.townList = [];
+              }
+            },
+            town: function(val) {
+              this.filterUpdate();
+            }
+          },
+          methods: {
+            init: function() {
+              this.countyList = [{ title: "請選擇", value: "" }].concat(
+                this.getList(this.data, {
+                  value: function(el) {
+                    return el.county;
+                  }
+                })
+              );
+              this.markers = this.createMarkers();
+              this.markers.addTo(this.map);
+            },
+            resize: function() {
+              this.phone = window.innerWidth <= 480;
+              if (!(this.phone ^ this.sideOpen)) {
+                this.sideOpen = !this.phone;
+              }
+            },
+            createMap: function() {
+              var map = L.map("map", {
+                center: [23.5, 121],
+                zoom: 8,
+                maxZoom: 18,
+                minZoom: 2,
+                zoomControl: false
+              });
+              L.control
+                .zoom({
+                  position: "topright"
+                })
+                .addTo(map);
+              L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              }).addTo(map);
+              return map;
+            },
+            createMarkers: function() {
+              var markers = new L.MarkerClusterGroup();
+              var markerList = this.data.map(function(el, index) {
+                return L.marker(el.coordinates, {
+                  id: el.id,
+                  title: el.name
+                }).bindPopup(
+                  `
+                  <div class="markerItem">
+                    <div class="info">
+                      <h2>${el.name}</h2>
+                      <h3><i class="fas fa-map-marker-alt"></i>地址：<a href="https://www.google.com.tw/maps/place/${el.address}" target="_blank">${el.address}</a></h3>
+                      <h3><i class="fas fa-phone-alt"></i>電話：<a href="tel:${el.phone}">${el.phone}</a></h3>
+                    </div>
+                    <div class="mask">
+                      <div class="item"><div>成人口罩</div><div>${el.mask_adult} 個</div></div>
+                      <div class="item"><div>兒童口罩</div><div>${el.mask_child} 個</div></div>
+                    </div>
+                  </div>
+                  `
+                );
+              });
+              markers.addLayers(markerList);
+              return markers;
+            },
+            filterUpdate: function() {
+              var data = [];
+              if (this.county !== "") {
+                data = this.data.filter(function(el) {
+                  return el.county === this.county;
+                }, this);
+              }
+              if (this.town !== "") {
+                data = data.filter(function(el) {
+                  return el.town === this.town;
+                }, this);
+              }
+              this.filterData = data;
+            },
+            getList: function(data, fun) {
+              var list = [];
+              data.forEach(function(el) {
+                var value = fun && fun.value ? fun.value(el) : el;
+                var judge = fun && fun.judge ? fun.judge : undefined;
+                if ((judge ? judge(el) : true) && list.indexOf(value) === -1 && value !== "") {
+                  list.push(value);
+                }
+              });
+              return list.map(function(el) {
+                return { title: el, value: el };
+              });
+            },
+            filterItem_click: function(item) {
+              var that = this;
+              this.markers.getLayers().forEach(function(el) {
+                if (el.isPopupOpen() && el.options.id !== item.id) {
+                  el.closePopup();
+                }
+              });
+              var distance = this.map.getCenter().distanceTo(item.coordinates);
+              var zoom = Math.abs(this.map.getZoom() - 18);
+              var duration = Math.min(Math.max(distance - 300, 0), 1) * 1.5 + (zoom / 18) * 1 + 0.5;
+              this.map.flyTo(item.coordinates, 18, {
+                duration: duration
+              });
+              this.map.once("moveend", function() {
+                var marker = that.markers.getLayers().find(function(el) {
+                  return el.options.id === item.id;
+                });
+                marker.openPopup();
+              });
+              if (this.phone) {
+                this.sideOpen = false;
+              }
+            },
+            sideButton_click: function() {
+              this.sideOpen = !this.sideOpen;
+            },
+            close_click: function() {
+              this.sideOpen = false;
+            }
+          },
+          computed: {}
+        });
+      }
+    </script>
+  </body>
+</html>
